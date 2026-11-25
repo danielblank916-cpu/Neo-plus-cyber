@@ -97,3 +97,5 @@ jobs:
           path: ${{ steps.locate.outputs.app_dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+
+# Trigger initial build from the default branch.
