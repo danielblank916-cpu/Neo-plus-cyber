@@ -74,26 +74,45 @@ jobs:
           test -f android/app/build.gradle || test -f android/app/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
-          groovy = Path("android/app/build.gradle")
-          kotlin = Path("android/app/build.gradle.kts")
-          if kotlin.exists():
-              p = kotlin
-              s = p.read_text()
-              import re
-              s2, count = re.subn(r"(?m)^([ \\t]*compileSdk\\s*=\\s*)(?:flutter\\.compileSdkVersion|\\d+)", r"\\g<1>36", s, count=1)
-          elif groovy.exists():
-              p = groovy
-              s = p.read_text()
-              import re
-              s2, count = re.subn(r"(?m)^([ \\t]*compileSdkVersion\\s+)(?:flutter\\.compileSdkVersion|\\d+)", r"\\g<1>36", s, count=1)
-              if count == 0:
-                  s2, count = re.subn(r"(?m)^([ \\t]*compileSdk\\s+)(?:flutter\\.compileSdkVersion|\\d+)", r"\\g<1>36", s, count=1)
-          else:
+
+          candidates = [
+              (Path("android/app/build.gradle.kts"), "kotlin"),
+              (Path("android/app/build.gradle"), "groovy"),
+          ]
+          existing = [(path, kind) for path, kind in candidates if path.is_file()]
+          if not existing:
               raise SystemExit("Android app Gradle file not found")
-          if count == 0:
-              raise SystemExit(f"Could not safely locate compileSdk setting in {p}")
-          p.write_text(s2)
-          print(f"Set Android compileSdk to 36 in {p}")
+
+          updated = False
+          for path, kind in existing:
+              lines = path.read_text().splitlines()
+              for index, line in enumerate(lines):
+                  stripped = line.strip()
+                  if kind == "kotlin" and stripped.startswith("compileSdk"):
+                      indent = line[:len(line) - len(line.lstrip())]
+                      lines[index] = indent + "compileSdk = 36"
+                      updated = True
+                      break
+                  if kind == "groovy" and stripped.startswith("compileSdkVersion"):
+                      indent = line[:len(line) - len(line.lstrip())]
+                      lines[index] = indent + "compileSdkVersion 36"
+                      updated = True
+                      break
+                  if kind == "groovy" and stripped.startswith("compileSdk"):
+                      indent = line[:len(line) - len(line.lstrip())]
+                      lines[index] = indent + "compileSdk 36"
+                      updated = True
+                      break
+              if updated:
+                  path.write_text("\n".join(lines) + "\n")
+                  print(f"Set Android compileSdk to 36 in {path}")
+                  break
+
+          if not updated:
+              for path, _ in existing:
+                  print(f"--- {path} ---")
+                  print(path.read_text())
+              raise SystemExit("Could not find a compileSdk declaration in the generated Gradle file")
           PY
 
       - name: Install Flutter dependencies
