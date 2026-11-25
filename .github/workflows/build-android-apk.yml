@@ -77,6 +77,38 @@ jobs:
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter pub get
 
+      - name: Apply verified Dart compatibility fixes
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          proxy = Path("lib/local_proxy.dart")
+          proxy_text = proxy.read_text()
+          material_import = "import 'package:flutter/material.dart';"
+          if material_import not in proxy_text:
+              proxy.write_text(material_import + "\\n" + proxy_text)
+              print("Added missing Flutter Material import to local_proxy.dart")
+          else:
+              print("Flutter Material import already present")
+
+          assessment = Path("lib/vulnerability_assessment.dart")
+          assessment_text = assessment.read_text()
+          invalid = "..maxRedirects = 5;"
+          if invalid in assessment_text:
+              assessment_text = assessment_text.replace(invalid, ";")
+              assessment.write_text(assessment_text)
+              print("Removed invalid HttpClient.maxRedirects cascade; Dart HttpClientRequest retains its default redirect limit")
+          elif "maxRedirects" in assessment_text:
+              raise SystemExit("Unexpected maxRedirects code shape; refusing to apply an unsafe automatic edit")
+          else:
+              print("No invalid HttpClient.maxRedirects setting found")
+
+          print("Compatibility patch complete")
+          PY
+          dart format --output=none --set-exit-if-changed lib/local_proxy.dart lib/vulnerability_assessment.dart
+
       - name: Build release APK
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter build apk --release
