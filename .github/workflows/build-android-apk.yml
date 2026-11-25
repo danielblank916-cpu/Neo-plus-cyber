@@ -107,7 +107,7 @@ jobs:
 
           print("Compatibility patch complete")
           PY
-          dart format --output=none --set-exit-if-changed lib/local_proxy.dart lib/vulnerability_assessment.dart
+          dart format lib/local_proxy.dart lib/vulnerability_assessment.dart
 
       - name: Build release APK
         working-directory: ${{ steps.locate.outputs.app_dir }}
