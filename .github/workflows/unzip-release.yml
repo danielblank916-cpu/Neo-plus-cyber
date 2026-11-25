@@ -1,0 +1,76 @@
+name: Unzip NEO CYBER release
+
+on:
+  workflow_dispatch:
+    inputs:
+      archive:
+        description: "ZIP file in the repository root (for example NEO_CYBER_Android_v2.9.zip)"
+        required: true
+        default: "NEO_CYBER_Android_v2.9.zip"
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "*.zip"
+
+permissions:
+  contents: read
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select archive
+        id: select
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            archive="${{ inputs.archive }}"
+          else
+            archive="$(find . -maxdepth 1 -type f -name 'NEO_CYBER_Android_v*.zip' -printf '%f\n' | sort -V | tail -n 1)"
+          fi
+          if [[ -z "$archive" || "$archive" == */* || "$archive" == *".."* || ! -f "$archive" ]]; then
+            echo "A valid ZIP file in the repository root must be selected." >&2
+            exit 1
+          fi
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "Selected: $archive"
+
+      - name: Safely extract ZIP
+        env:
+          ARCHIVE: ${{ steps.select.outputs.archive }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import zipfile
+
+          archive = pathlib.Path(os.environ["ARCHIVE"])
+          destination = pathlib.Path("extracted") / archive.stem
+          destination.mkdir(parents=True, exist_ok=True)
+          root = destination.resolve()
+
+          with zipfile.ZipFile(archive) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f"ZIP integrity check failed at: {bad}")
+              for member in zf.infolist():
+                  target = (destination / member.filename).resolve()
+                  if target != root and root not in target.parents:
+                      raise SystemExit(f"Unsafe ZIP entry path: {member.filename}")
+              zf.extractall(destination)
+
+          print(f"Extracted {archive} into {destination}")
+          PY
+
+      - name: Upload extracted source as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neo-cyber-extracted-source
+          path: extracted/
+          if-no-files-found: error
+          retention-days: 14
