@@ -119,6 +119,32 @@ jobs:
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter pub get
 
+      - name: Align Flutter plugin Android compile SDK
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
+          changed = []
+          if cache.exists():
+              for path in list(cache.glob("*/android/build.gradle")) + list(cache.glob("*/android/build.gradle.kts")):
+                  source = path.read_text()
+                  if path.suffix == ".kts":
+                      pattern = r"(?m)^(\\s*compileSdk\\s*=\\s*)\\d+"
+                  else:
+                      pattern = r"(?m)^(\\s*compileSdkVersion\\s+)\\d+|^(\\s*compileSdk\\s+)\\d+"
+                  updated = re.sub(pattern, lambda m: (m.group(1) or m.group(2)) + "36", source)
+                  if updated != source:
+                      path.write_text(updated)
+                      changed.append(str(path))
+          print("Updated plugin Gradle compile SDK declarations:")
+          for item in changed:
+              print(" - " + item)
+          print(f"Patched {len(changed)} Flutter plugin Gradle file(s)")
+          PY
+
       - name: Apply verified Dart compatibility fixes
         working-directory: ${{ steps.locate.outputs.app_dir }}
         shell: bash
