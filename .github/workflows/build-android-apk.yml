@@ -88,7 +88,7 @@ jobs:
           proxy_text = proxy.read_text()
           material_import = "import 'package:flutter/material.dart';"
           if material_import not in proxy_text:
-              proxy.write_text(material_import + "\\n" + proxy_text)
+              proxy.write_text(material_import + "\n" + proxy_text)
               print("Added missing Flutter Material import to local_proxy.dart")
           else:
               print("Flutter Material import already present")
