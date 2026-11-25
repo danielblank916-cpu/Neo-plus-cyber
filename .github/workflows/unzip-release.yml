@@ -1,76 +1,100 @@
-name: Unzip NEO CYBER release
+name: Unzip all NEO CYBER archives
 
 on:
   workflow_dispatch:
-    inputs:
-      archive:
-        description: "ZIP file in the repository root (for example NEO_CYBER_Android_v2.9.zip)"
-        required: true
-        default: "NEO_CYBER_Android_v2.9.zip"
-        type: string
   push:
     branches:
       - main
     paths:
-      - "*.zip"
+      - "**/*.zip"
 
 permissions:
   contents: read
 
 jobs:
-  unzip:
+  unzip-all:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Select archive
-        id: select
+      - name: Safely extract every ZIP archive
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            archive="${{ inputs.archive }}"
-          else
-            archive="$(find . -maxdepth 1 -type f -name 'NEO_CYBER_Android_v*.zip' -printf '%f\n' | sort -V | tail -n 1)"
-          fi
-          if [[ -z "$archive" || "$archive" == */* || "$archive" == *".."* || ! -f "$archive" ]]; then
-            echo "A valid ZIP file in the repository root must be selected." >&2
-            exit 1
-          fi
-          echo "archive=$archive" >> "$GITHUB_OUTPUT"
-          echo "Selected: $archive"
-
-      - name: Safely extract ZIP
-        env:
-          ARCHIVE: ${{ steps.select.outputs.archive }}
-        run: |
           python3 - <<'PY'
-          import os
           import pathlib
+          import stat
           import zipfile
 
-          archive = pathlib.Path(os.environ["ARCHIVE"])
-          destination = pathlib.Path("extracted") / archive.stem
-          destination.mkdir(parents=True, exist_ok=True)
-          root = destination.resolve()
+          repo = pathlib.Path(".").resolve()
+          output = repo / "extracted"
+          archives = sorted(
+              p for p in repo.rglob("*")
+              if p.is_file()
+              and p.suffix.lower() == ".zip"
+              and ".git" not in p.relative_to(repo).parts
+              and "extracted" not in p.relative_to(repo).parts
+          )
 
-          with zipfile.ZipFile(archive) as zf:
-              bad = zf.testzip()
-              if bad:
-                  raise SystemExit(f"ZIP integrity check failed at: {bad}")
-              for member in zf.infolist():
-                  target = (destination / member.filename).resolve()
-                  if target != root and root not in target.parents:
-                      raise SystemExit(f"Unsafe ZIP entry path: {member.filename}")
-              zf.extractall(destination)
+          if not archives:
+              raise SystemExit("No ZIP archives were found in the repository.")
 
-          print(f"Extracted {archive} into {destination}")
+          output.mkdir(parents=True, exist_ok=True)
+          total_files = 0
+
+          for archive in archives:
+              # Keep each archive's contents in its own folder.
+              destination = output / archive.stem
+              if destination.exists():
+                  raise SystemExit(
+                      f"Extraction folder already exists (duplicate archive name?): {destination}"
+                  )
+              destination.mkdir(parents=True)
+              root = destination.resolve()
+
+              print(f"Checking {archive.relative_to(repo)}")
+              with zipfile.ZipFile(archive) as zf:
+                  bad = zf.testzip()
+                  if bad:
+                      raise SystemExit(f"ZIP integrity check failed: {archive} ({bad})")
+
+                  members = zf.infolist()
+                  for member in members:
+                      name = member.filename.replace("\\", "/")
+                      path = pathlib.PurePosixPath(name)
+                      mode = member.external_attr >> 16
+
+                      if path.is_absolute() or ".." in path.parts:
+                          raise SystemExit(
+                              f"Unsafe path in {archive.name}: {member.filename}"
+                          )
+                      if path.parts and ":" in path.parts[0]:
+                          raise SystemExit(
+                              f"Unsafe drive path in {archive.name}: {member.filename}"
+                          )
+                      if stat.S_ISLNK(mode):
+                          raise SystemExit(
+                              f"Symbolic link entry is not allowed: {member.filename}"
+                          )
+
+                      target = (destination / pathlib.Path(*path.parts)).resolve()
+                      if target != root and root not in target.parents:
+                          raise SystemExit(
+                              f"Unsafe extraction target in {archive.name}: {member.filename}"
+                          )
+
+                  zf.extractall(destination)
+                  total_files += sum(not m.is_dir() for m in members)
+
+              print(f"Extracted {len(members)} entries from {archive.name} -> {destination.relative_to(repo)}")
+
+          print(f"Finished: {len(archives)} ZIP archive(s), {total_files} file(s).")
           PY
 
-      - name: Upload extracted source as workflow artifact
+      - name: Upload all extracted source folders
         uses: actions/upload-artifact@v4
         with:
-          name: neo-cyber-extracted-source
+          name: neo-cyber-all-extracted-archives
           path: extracted/
           if-no-files-found: error
           retention-days: 14
