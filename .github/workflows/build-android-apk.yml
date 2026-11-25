@@ -1,0 +1,99 @@
+name: Build NEO CYBER Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "NEO_CYBER_Android_v2.9.zip"
+      - ".github/workflows/build-android-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neo-cyber-apk-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify source archive
+        run: |
+          test -f "NEO_CYBER_Android_v2.9.zip"
+          unzip -t "NEO_CYBER_Android_v2.9.zip"
+
+      - name: Extract v2.9 source
+        run: |
+          mkdir -p source
+          unzip -q "NEO_CYBER_Android_v2.9.zip" -d source
+          echo "Extracted source tree:"
+          find source -maxdepth 4 -type f | head -100
+
+      - name: Locate Flutter Android application
+        id: locate
+        shell: bash
+        run: |
+          APP_DIR=""
+          while IFS= read -r pubspec; do
+            candidate="$(dirname "$pubspec")"
+            if [ -f "$candidate/lib/main.dart" ] &&
+               { [ -f "$candidate/android/app/build.gradle" ] || [ -f "$candidate/android/app/build.gradle.kts" ]; }; then
+              APP_DIR="$candidate"
+              break
+            fi
+          done < <(find source -type f -name pubspec.yaml -not -path '*/.dart_tool/*' | sort)
+
+          if [ -z "$APP_DIR" ]; then
+            echo "::error::No Flutter Android app (pubspec.yaml, lib/main.dart and android/app Gradle file) was found in the v2.9 archive."
+            exit 1
+          fi
+
+          echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "Flutter app directory: $APP_DIR"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          java -version
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: flutter build apk --release
+
+      - name: Verify APK output
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+          sha256sum build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neo-cyber-v2.9-release-apk
+          path: ${{ steps.locate.outputs.app_dir }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
