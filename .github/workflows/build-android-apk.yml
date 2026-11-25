@@ -119,45 +119,39 @@ jobs:
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter pub get
 
-      - name: Align Flutter plugin Android compile SDK
+      - name: Force Android library plugins to compile with API 36
+        working-directory: ${{ steps.locate.outputs.app_dir }}
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
-          cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
-          changed = []
-          if cache.exists():
-              paths = list(cache.glob("*/android/build.gradle")) + list(cache.glob("*/android/build.gradle.kts"))
-              for path in paths:
-                  lines = path.read_text().splitlines()
-                  touched = False
-                  for index, line in enumerate(lines):
-                      stripped = line.strip()
-                      match = re.match(r"^(compileSdkVersion|compileSdk)(\\s*=\\s*|\\s+)(.*)$", stripped)
-                      if not match:
-                          continue
-                      indent = line[:len(line) - len(line.lstrip())]
-                      comment = ""
-                      value = match.group(3)
-                      if "//" in value:
-                          value, comment = value.split("//", 1)
-                          comment = " // " + comment.strip()
-                      lines[index] = indent + match.group(1) + match.group(2) + "36" + comment
-                      touched = True
-                  if touched:
-                      path.write_text("\\n".join(lines) + "\\n")
-                      changed.append(str(path))
-          print("Updated plugin Gradle compile SDK declarations:")
-          for item in changed:
-              print(" - " + item)
-          print(f"Patched {len(changed)} Flutter plugin Gradle file(s)")
-          picker = [p for p in changed if "file_picker-" in p]
-          if not picker:
-              print("WARNING: file_picker Gradle file was not changed; inspect plugin Gradle configuration.")
-          PY
+          cache = Path.home() / ".pub-cache"
+          candidates = list(cache.rglob("file_picker*/android/build.gradle")) + list(cache.rglob("file_picker*/android/build.gradle.kts"))
+          if not candidates:
+              candidates = [p for p in cache.rglob("build.gradle*") if "file_picker-" in str(p) and "/android/" in str(p)]
+          if not candidates:
+              raise SystemExit("Could not locate file_picker Android Gradle file in pub cache")
 
+          for path in candidates:
+              source = path.read_text()
+              lines = source.splitlines()
+              found = False
+              for i, line in enumerate(lines):
+                  if re.match(r"^\\s*compileSdk(?:Version)?\\s*(?:=\\s*)?.+$", line):
+                      indent = line[:len(line) - len(line.lstrip())]
+                      lines[i] = indent + ("compileSdk = 36" if path.suffix == ".kts" else "compileSdkVersion 36")
+                      found = True
+                      print(f"Set API 36: {path}:{i+1}")
+              if not found:
+                  raise SystemExit(f"No compileSdk declaration found in {path}")
+              path.write_text("\\n".join(lines) + "\\n")
+
+          print("file_picker Android compile SDK is explicitly set to API 36.")
+          PY
+          echo "---- file_picker Gradle compile SDK ----"
+          grep -R -n -E 'compileSdk(Version)?' "$HOME/.pub-cache"/*/hosted/pub.dev/file_picker-*/android 2>/dev/null || true
       - name: Apply verified Dart compatibility fixes
         working-directory: ${{ steps.locate.outputs.app_dir }}
         shell: bash
