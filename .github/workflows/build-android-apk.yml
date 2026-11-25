@@ -109,6 +109,15 @@ jobs:
           PY
           dart format lib/local_proxy.dart lib/vulnerability_assessment.dart
 
+      - name: Diagnose Dart syntax errors
+        if: always()
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: |
+          echo '--- main.dart lines 260-285 ---'
+          nl -ba lib/main.dart | sed -n '260,285p'
+          echo '--- main.dart lines 1345-1370 ---'
+          nl -ba lib/main.dart | sed -n '1345,1370p'
+
       - name: Build release APK
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter build apk --release
