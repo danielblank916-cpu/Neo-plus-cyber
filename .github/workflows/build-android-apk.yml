@@ -119,39 +119,42 @@ jobs:
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter pub get
 
-      - name: Force Android library plugins to compile with API 36
+      - name: Set file_picker Android compile SDK to API 36
         working-directory: ${{ steps.locate.outputs.app_dir }}
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          cache = Path.home() / ".pub-cache"
-          candidates = list(cache.rglob("file_picker*/android/build.gradle")) + list(cache.rglob("file_picker*/android/build.gradle.kts"))
+          cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
+          candidates = list(cache.glob("file_picker-*/android/build.gradle"))
+          candidates += list(cache.glob("file_picker-*/android/build.gradle.kts"))
           if not candidates:
-              candidates = [p for p in cache.rglob("build.gradle*") if "file_picker-" in str(p) and "/android/" in str(p)]
-          if not candidates:
-              raise SystemExit("Could not locate file_picker Android Gradle file in pub cache")
+              raise SystemExit(f"file_picker Gradle file not found under {cache}")
 
           for path in candidates:
-              source = path.read_text()
-              lines = source.splitlines()
-              found = False
-              for i, line in enumerate(lines):
-                  if re.match(r"^\\s*compileSdk(?:Version)?\\s*(?:=\\s*)?.+$", line):
-                      indent = line[:len(line) - len(line.lstrip())]
-                      lines[i] = indent + ("compileSdk = 36" if path.suffix == ".kts" else "compileSdkVersion 36")
-                      found = True
-                      print(f"Set API 36: {path}:{i+1}")
-              if not found:
-                  raise SystemExit(f"No compileSdk declaration found in {path}")
-              path.write_text("\\n".join(lines) + "\\n")
+              lines = path.read_text().splitlines()
+              matches = [i for i, line in enumerate(lines)
+                         if "compileSdk" in line and not line.lstrip().startswith("//")]
+              if not matches:
+                  print(f"--- contents of {path} ---")
+                  print(path.read_text())
+                  raise SystemExit(f"No compileSdk setting found in {path}")
+              for i in matches:
+                  indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+                  if path.suffix == ".kts":
+                      lines[i] = indent + "compileSdk = 36"
+                  else:
+                      lines[i] = indent + "compileSdkVersion 36"
+              path.write_text("\n".join(lines) + "\n")
+              print(f"Patched {path}")
+              for i in matches:
+                  print(f"Verified line {i+1}: {lines[i].strip()}")
 
-          print("file_picker Android compile SDK is explicitly set to API 36.")
+          print("file_picker compile SDK patch completed.")
           PY
-          echo "---- file_picker Gradle compile SDK ----"
-          grep -R -n -E 'compileSdk(Version)?' "$HOME/.pub-cache"/*/hosted/pub.dev/file_picker-*/android 2>/dev/null || true
+          echo "---- verified file_picker Gradle setting ----"
+          grep -n -E 'compileSdk' "$HOME"/.pub-cache/hosted/pub.dev/file_picker-*/android/build.gradle*
       - name: Apply verified Dart compatibility fixes
         working-directory: ${{ steps.locate.outputs.app_dir }}
         shell: bash
