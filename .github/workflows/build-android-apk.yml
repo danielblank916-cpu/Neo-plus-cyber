@@ -109,6 +109,59 @@ jobs:
           PY
           dart format lib/local_proxy.dart lib/vulnerability_assessment.dart
 
+      - name: Repair verified main.dart syntax errors
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/main.dart")
+          source = path.read_text()
+
+          old_device_close = "    ]))))),"
+          new_device_close = "    ])))),"
+          if old_device_close in source:
+              source = source.replace(old_device_close, new_device_close, 1)
+              print("Removed the extra closing parenthesis in the device inventory widget")
+          elif new_device_close in source:
+              print("Device inventory closing sequence already repaired")
+          else:
+              raise SystemExit("Could not identify the device inventory closing sequence; refusing a blind edit")
+
+          old_port_row = "    Row(children: [Expanded(child: TextField(controller: start, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Start port'))), const SizedBox(width: 10), Expanded(child: TextField(controller: end, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'End port'))]),"
+          new_port_row = """    Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: start,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Start port'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: end,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'End port'),
+                  ),
+                ),
+              ],
+            ),"""
+          if old_port_row in source:
+              source = source.replace(old_port_row, new_port_row, 1)
+              print("Rewrote the TCP port range row with balanced widget delimiters")
+          elif new_port_row in source:
+              print("TCP port range row already repaired")
+          else:
+              raise SystemExit("Could not identify the TCP port range row; refusing a blind edit")
+
+          path.write_text(source)
+          PY
+          dart format lib/main.dart
+          dart analyze lib/main.dart
+
       - name: Diagnose Dart syntax errors
         if: always()
         working-directory: ${{ steps.locate.outputs.app_dir }}
