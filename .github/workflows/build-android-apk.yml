@@ -36,26 +36,17 @@ jobs:
           echo "Extracted source tree:"
           find source -maxdepth 4 -type f | head -100
 
-      - name: Locate Flutter Android application
+      - name: Locate main NEO CYBER Flutter application
         id: locate
         shell: bash
         run: |
-          APP_DIR=""
-          while IFS= read -r pubspec; do
-            candidate="$(dirname "$pubspec")"
-            if [ -f "$candidate/lib/main.dart" ]; then
-              APP_DIR="$candidate"
-              break
-            fi
-          done < <(find source -type f -name pubspec.yaml -not -path '*/.dart_tool/*' | sort)
-
-          if [ -z "$APP_DIR" ]; then
-            echo "::error::No Flutter app (pubspec.yaml and lib/main.dart) was found in the v2.9 archive."
+          APP_DIR="source/neo_cyber_android"
+          if [ ! -f "$APP_DIR/pubspec.yaml" ] || [ ! -f "$APP_DIR/lib/main.dart" ]; then
+            echo "::error::Main NEO CYBER Flutter app not found at $APP_DIR."
             exit 1
           fi
-
           echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
-          echo "Flutter app directory: $APP_DIR"
+          echo "Building main application: $APP_DIR"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -104,5 +95,3 @@ jobs:
           path: ${{ steps.locate.outputs.app_dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
-
-# Trigger initial build from the default branch.
