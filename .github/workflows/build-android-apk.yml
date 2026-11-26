@@ -137,7 +137,7 @@ jobs:
               '    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />',
               '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />',
           ]
-          match = re.search(r'<manifest\\b[^>]*>', source)
+          match = re.search(r'<manifest\b[^>]*>', source)
           if not match:
               raise SystemExit("Could not locate the manifest root element")
           existing = source
@@ -146,7 +146,7 @@ jobs:
                          re.search(r'android:name="([^"]+)"', line).group(1)
                      ) + r'"', existing) is None]
           if missing:
-              source = source[:match.end()] + "\\n" + "\\n".join(missing) + source[match.end():]
+              source = source[:match.end()] + "\n" + "\n".join(missing) + source[match.end():]
               manifest.write_text(source)
           print("Verified release manifest permissions:")
           for line in additions:
