@@ -48,6 +48,13 @@ jobs:
           echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
           echo "Building main application: $APP_DIR"
 
+      - name: Inspect current NEO CYBER interface source
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: |
+          echo '--- APP ENTRY AND THEME ---'
+          sed -n '1,260p' lib/main.dart
+          echo '--- HOME DASHBOARD AND NAVIGATION ---'
+          grep -n -E 'class .*Home|class .*Dashboard|NavigationBar|BottomNavigationBar|GridView|Welcome|NEO CYBER|ThemeData|Scaffold\(' lib/main.dart | head -120
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
