@@ -115,6 +115,49 @@ jobs:
               raise SystemExit("Could not find a compileSdk declaration in the generated Gradle file")
           PY
 
+      - name: Declare release network and Bluetooth permissions
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          if not manifest.is_file():
+              raise SystemExit(f"Android manifest not found: {manifest}")
+          source = manifest.read_text()
+          additions = [
+              '    <uses-permission android:name="android.permission.INTERNET" />',
+              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+              '    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
+              '    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />',
+              '    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />',
+              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />',
+              '    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />',
+              '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />',
+          ]
+          match = re.search(r'<manifest\\b[^>]*>', source)
+          if not match:
+              raise SystemExit("Could not locate the manifest root element")
+          existing = source
+          missing = [line for line in additions
+                     if re.search(r'android:name="' + re.escape(
+                         re.search(r'android:name="([^"]+)"', line).group(1)
+                     ) + r'"', existing) is None]
+          if missing:
+              source = source[:match.end()] + "\\n" + "\\n".join(missing) + source[match.end():]
+              manifest.write_text(source)
+          print("Verified release manifest permissions:")
+          for line in additions:
+              if line in source:
+                  print(line.strip())
+              else:
+                  raise SystemExit(f"Required permission missing after patch: {line}")
+          PY
+          echo "--- Android release manifest ---"
+          sed -n '1,35p' android/app/src/main/AndroidManifest.xml
+
       - name: Install Flutter dependencies
         working-directory: ${{ steps.locate.outputs.app_dir }}
         run: flutter pub get
