@@ -55,6 +55,10 @@ jobs:
           sed -n '1,260p' lib/main.dart
           echo '--- HOME DASHBOARD AND NAVIGATION ---'
           grep -n -E 'class .*Home|class .*Dashboard|NavigationBar|BottomNavigationBar|GridView|Welcome|NEO CYBER|ThemeData|Scaffold\(' lib/main.dart | head -120
+      - name: Inspect dashboard widget for visual restoration
+        working-directory: ${{ steps.locate.outputs.app_dir }}
+        run: |
+          sed -n '1100,1260p' lib/main.dart
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
