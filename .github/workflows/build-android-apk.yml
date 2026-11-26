@@ -48,17 +48,262 @@ jobs:
           echo "app_dir=$APP_DIR" >> "$GITHUB_OUTPUT"
           echo "Building main application: $APP_DIR"
 
-      - name: Inspect current NEO CYBER interface source
+      - name: Apply screenshot-matched NEO CYBER dashboard
         working-directory: ${{ steps.locate.outputs.app_dir }}
+        shell: bash
         run: |
-          echo '--- APP ENTRY AND THEME ---'
-          sed -n '1,260p' lib/main.dart
-          echo '--- HOME DASHBOARD AND NAVIGATION ---'
-          grep -n -E 'class .*Home|class .*Dashboard|NavigationBar|BottomNavigationBar|GridView|Welcome|NEO CYBER|ThemeData|Scaffold\(' lib/main.dart | head -120
-      - name: Inspect dashboard widget for visual restoration
-        working-directory: ${{ steps.locate.outputs.app_dir }}
-        run: |
-          sed -n '1100,1260p' lib/main.dart
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/main.dart")
+          source = path.read_text()
+          source = source.replace(
+              "onOpenVulnerability: () => setState(() => index = 7)),",
+              "onOpenVulnerability: () => setState(() => index = 7),\\n          onOpenDeviceControl: () => setState(() => index = 8)),",
+              1,
+          )
+          if "onOpenDeviceControl:" not in source:
+              raise SystemExit("Could not wire the existing Device Control page")
+
+          old_nav = """      bottomNavigationBar: NavigationBar(
+                backgroundColor: _panel,
+                selectedIndex: index,
+                onDestinationSelected: (v) => setState(() => index = v),
+                destinations: const [
+                  NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Home'),
+                  NavigationDestination(icon: Icon(Icons.radar), label: 'Ports'),
+                  NavigationDestination(icon: Icon(Icons.language), label: 'Web'),
+                  NavigationDestination(icon: Icon(Icons.graphic_eq), label: 'Packets'),
+                  NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+                  NavigationDestination(icon: Icon(Icons.info_outline), label: 'About'),
+                  NavigationDestination(icon: Icon(Icons.swap_horiz), label: 'Proxy'),
+                  NavigationDestination(icon: Icon(Icons.bug_report_outlined), label: 'Assess'),
+                  NavigationDestination(icon: Icon(Icons.devices_other), label: 'Devices'),
+                ],
+              ),"""
+          new_nav = """      bottomNavigationBar: NavigationBar(
+                backgroundColor: const Color(0xFF080D18),
+                indicatorColor: const Color(0xFF123B66),
+                selectedIndex: <int>[0, 1, 4, 5].indexOf(index) < 0 ? 0 : <int>[0, 1, 4, 5].indexOf(index),
+                onDestinationSelected: (v) => setState(() => index = <int>[0, 1, 4, 5][v]),
+                destinations: const [
+                  NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+                  NavigationDestination(icon: Icon(Icons.bolt_outlined), selectedIcon: Icon(Icons.bolt), label: 'Quick Tools'),
+                  NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Results'),
+                  NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
+                ],
+              ),"""
+          if old_nav in source:
+              source = source.replace(old_nav, new_nav, 1)
+          elif "label: 'Quick Tools'" not in source:
+              raise SystemExit("Could not safely replace the existing bottom navigation")
+
+          a = source.index("class DashboardPage extends StatelessWidget {")
+          b = source.index("class ScanRecord {", a)
+          dashboard = r'''class DashboardPage extends StatelessWidget {
+            final VoidCallback onOpenScanner;
+            final VoidCallback onOpenWebCheck;
+            final VoidCallback onOpenPackets;
+            final VoidCallback onOpenProxy;
+            final VoidCallback onOpenLocalProxy;
+            final VoidCallback onOpenVulnerability;
+            final VoidCallback onOpenDeviceControl;
+
+            const DashboardPage({
+              super.key,
+              required this.onOpenScanner,
+              required this.onOpenWebCheck,
+              required this.onOpenPackets,
+              required this.onOpenProxy,
+              required this.onOpenLocalProxy,
+              required this.onOpenVulnerability,
+              required this.onOpenDeviceControl,
+            });
+
+            void _unavailable(BuildContext context, String title, String detail) {
+              showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF111A2B),
+                  title: Text(title),
+                  content: Text(detail),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('CLOSE'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            @override
+            Widget build(BuildContext context) => ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+              children: [
+                Row(children: [
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF073B68),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _blue.withOpacity(.8)),
+                      boxShadow: [BoxShadow(color: _blue.withOpacity(.18), blurRadius: 14)],
+                    ),
+                    child: const Icon(Icons.shield_moon, color: _blue, size: 27),
+                  ),
+                  const SizedBox(width: 11),
+                  const Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('NEO CYBER', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      Text('MOBILE SECURITY PLATFORM', style: TextStyle(color: Colors.white54, fontSize: 9, letterSpacing: 1.3)),
+                    ],
+                  )),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF092B26),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF25D69A).withOpacity(.6)),
+                    ),
+                    child: const Text('ANDROID', style: TextStyle(color: Color(0xFF55E6B3), fontSize: 9, fontWeight: FontWeight.bold)),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                Container(
+                  height: 164,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(color: _blue.withOpacity(.75)),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [Color(0xFF092D50), Color(0xFF071321), Color(0xFF101B31)],
+                    ),
+                    boxShadow: [BoxShadow(color: _blue.withOpacity(.13), blurRadius: 18)],
+                  ),
+                  child: Stack(children: [
+                    Positioned(right: 0, top: 0, bottom: 0,
+                      child: Icon(Icons.public, size: 128, color: _blue.withOpacity(.13))),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('WELCOME TO YOUR SECURITY LAB', style: TextStyle(color: Color(0xFF73C9FF), fontSize: 9, letterSpacing: 1.4, fontWeight: FontWeight.bold)),
+                        SizedBox(height: 12),
+                        Text('THINK. TEST.\nPROTECT.', style: TextStyle(fontSize: 25, height: 1.05, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                        SizedBox(height: 9),
+                        Text('Authorized security tools, directly on your Android device.', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                      ],
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 18),
+                const Row(children: [
+                  Text('SECURITY MODULES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                  Spacer(),
+                  Text('8 MODULES', style: TextStyle(color: Colors.white38, fontSize: 9)),
+                ]),
+                const SizedBox(height: 11),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.42,
+                  children: [
+                    _NeoModuleTile(icon: Icons.radar, title: 'Network Tools', subtitle: 'TCP scanning & discovery', onTap: onOpenScanner),
+                    _NeoModuleTile(icon: Icons.security, title: 'Security Tools', subtitle: 'Web checks & assessment', onTap: onOpenVulnerability),
+                    _NeoModuleTile(icon: Icons.wifi_tethering, title: 'Wireless Tools', subtitle: 'Bluetooth & device discovery', onTap: onOpenDeviceControl),
+                    _NeoModuleTile(icon: Icons.devices_other, title: 'Device Control', subtitle: 'Manage paired devices', onTap: onOpenDeviceControl),
+                    _NeoModuleTile(icon: Icons.bug_report_outlined, title: 'Penetration Testing', subtitle: 'Authorized assessment tools', onTap: onOpenVulnerability),
+                    _NeoModuleTile(icon: Icons.extension, title: 'Extra Tools', subtitle: 'Packets, HTTP & proxy', onTap: onOpenPackets),
+                    _NeoModuleTile(icon: Icons.graphic_eq, title: 'NEO PLUS AI', subtitle: 'AI assistant — planned', status: 'PLANNED', onTap: () => _unavailable(context, 'NEO PLUS AI', 'The AI assistant is not implemented in this build yet.')),
+                    _NeoModuleTile(icon: Icons.description_outlined, title: 'Logs & Reports', subtitle: 'Saved assessment history', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryPage()))),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B211F),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF28C997).withOpacity(.65)),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.check_circle_outline, color: Color(0xFF45DDAF), size: 25),
+                    SizedBox(width: 10),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('SYSTEM STATUS', style: TextStyle(color: Color(0xFF69E5BB), fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
+                      SizedBox(height: 3),
+                      Text('NEO CYBER app active • Android session', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                    ])),
+                    Text('READY', style: TextStyle(color: Color(0xFF69E5BB), fontSize: 9, fontWeight: FontWeight.bold)),
+                  ]),
+                ),
+                const SizedBox(height: 10),
+                const Text('Use only devices and systems you own or have explicit permission to assess.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 9)),
+              ],
+            );
+          }
+
+          class _NeoModuleTile extends StatelessWidget {
+            final IconData icon;
+            final String title;
+            final String subtitle;
+            final String status;
+            final VoidCallback onTap;
+
+            const _NeoModuleTile({
+              required this.icon, required this.title, required this.subtitle,
+              required this.onTap, this.status = 'OPEN',
+            });
+
+            @override
+            Widget build(BuildContext context) => Material(
+              color: const Color(0xFF0D1728),
+              borderRadius: BorderRadius.circular(13),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(13),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: _blue.withOpacity(.55)),
+                    boxShadow: [BoxShadow(color: _blue.withOpacity(.07), blurRadius: 12)],
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Icon(icon, color: _blue, size: 23),
+                      const Spacer(),
+                      Icon(Icons.arrow_forward_ios, color: _blue.withOpacity(.8), size: 12),
+                    ]),
+                    const Spacer(),
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 9, height: 1.2)),
+                    const SizedBox(height: 5),
+                    Text(status, style: const TextStyle(color: Color(0xFF62BFFF), fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: .8)),
+                  ]),
+                ),
+              ),
+            );
+          }
+
+          '''
+          source = source[:a] + dashboard + source[b:]
+          path.write_text(source)
+          print("Applied screenshot-style dashboard, eight module tiles, honest system status, and four-item navigation.")
+          PY
+          dart format lib/main.dart
+          dart analyze --format machine lib/main.dart > dashboard-analyze.txt
+          cat dashboard-analyze.txt
+          if grep -q '^ERROR|' dashboard-analyze.txt; then
+            echo "::error::Dashboard redesign introduced Dart errors"
+            exit 1
+          fi
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
