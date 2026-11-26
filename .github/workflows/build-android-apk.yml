@@ -93,10 +93,40 @@ jobs:
                   NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
                 ],
               ),"""
-          if old_nav in source:
-              source = source.replace(old_nav, new_nav, 1)
-          elif "label: 'Quick Tools'" not in source:
-              raise SystemExit("Could not safely replace the existing bottom navigation")
+          nav_marker = "bottomNavigationBar:"
+          nav_start = source.find(nav_marker)
+          if nav_start < 0:
+              raise SystemExit("Could not find the existing bottom navigation")
+          widget_start = source.find("NavigationBar(", nav_start)
+          if widget_start < 0:
+              raise SystemExit("Could not find NavigationBar widget")
+          open_paren = source.find("(", widget_start)
+          depth = 0
+          quote = None
+          escaped = False
+          widget_end = None
+          for pos in range(open_paren, len(source)):
+              ch = source[pos]
+              if quote:
+                  if escaped:
+                      escaped = False
+                  elif ch == "\\\\":
+                      escaped = True
+                  elif ch == quote:
+                      quote = None
+                  continue
+              if ch in ("'", '"'):
+                  quote = ch
+              elif ch == "(":
+                  depth += 1
+              elif ch == ")":
+                  depth -= 1
+                  if depth == 0:
+                      widget_end = pos + 1
+                      break
+          if widget_end is None:
+              raise SystemExit("Could not safely find the end of NavigationBar")
+          source = source[:widget_start] + new_nav.strip().replace("bottomNavigationBar: NavigationBar(", "NavigationBar(", 1) + source[widget_end:]
 
           a = source.index("class DashboardPage extends StatelessWidget {")
           b = source.index("class ScanRecord {", a)
