@@ -59,7 +59,7 @@ jobs:
           source = path.read_text()
           source = source.replace(
               "onOpenVulnerability: () => setState(() => index = 7)),",
-              "onOpenVulnerability: () => setState(() => index = 7),\\n          onOpenDeviceControl: () => setState(() => index = 8)),",
+              "onOpenVulnerability: () => setState(() => index = 7),\n          onOpenDeviceControl: () => setState(() => index = 8)),",
               1,
           )
           if "onOpenDeviceControl:" not in source:
@@ -92,7 +92,7 @@ jobs:
                   NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Results'),
                   NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
                 ],
-              ),"""
+              )"""
           nav_marker = "bottomNavigationBar:"
           nav_start = source.find(nav_marker)
           if nav_start < 0:
