@@ -327,13 +327,7 @@ jobs:
           path.write_text(source)
           print("Applied screenshot-style dashboard, eight module tiles, honest system status, and four-item navigation.")
           PY
-          dart format lib/main.dart
-          dart analyze --format machine lib/main.dart > dashboard-analyze.txt
-          cat dashboard-analyze.txt
-          if grep -q '^ERROR|' dashboard-analyze.txt; then
-            echo "::error::Dashboard redesign introduced Dart errors"
-            exit 1
-          fi
+          echo "Dashboard source updated; formatting and analysis run after Flutter setup."
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
